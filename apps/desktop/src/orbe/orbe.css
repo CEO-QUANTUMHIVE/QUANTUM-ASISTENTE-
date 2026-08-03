@@ -1,0 +1,295 @@
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+.orbe {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Colapsado: sólo la esfera, centrada y sin fondo. */
+.orbe:not(.orbe--abierto) {
+  justify-content: center;
+  align-items: center;
+}
+
+.orbe--abierto {
+  background: rgba(11, 11, 13, 0.96);
+  border: 1px solid var(--qh-line);
+  border-radius: 14px;
+  padding: 10px;
+}
+
+/* --- cabecera ------------------------------------------------------------ */
+
+.orbe__cabecera {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.orbe--abierto .orbe__cabecera {
+  justify-content: space-between;
+}
+
+.orbe__esfera {
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--qh-gold-dim);
+  background: radial-gradient(circle at 35% 30%, #1c1c21 0%, #0b0b0d 70%);
+  display: grid;
+  place-items: center;
+  position: relative;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+  flex: 0 0 auto;
+}
+
+.orbe--abierto .orbe__esfera {
+  width: 40px;
+  height: 40px;
+  border-width: 1.5px;
+}
+
+.orbe__marca {
+  font-family: var(--qh-mono);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  color: var(--qh-gold-dim);
+  user-select: none;
+  transition: color 200ms ease;
+}
+
+.orbe--abierto .orbe__marca {
+  font-size: 12px;
+}
+
+.orbe__esfera::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  transition: border-color 200ms ease;
+}
+
+/* Un estado por cada cosa que puede estar pasando. Sin esto, el orbe es un
+   círculo mudo y no se sabe si te escucha, si te mira o si se cayó. */
+
+.orbe[data-estado='lista'] .orbe__esfera,
+.orbe[data-estado='observando'] .orbe__esfera,
+.orbe[data-estado='escuchando'] .orbe__esfera {
+  border-color: var(--qh-gold);
+}
+.orbe[data-estado='lista'] .orbe__marca,
+.orbe[data-estado='observando'] .orbe__marca,
+.orbe[data-estado='escuchando'] .orbe__marca,
+.orbe[data-estado='hablando'] .orbe__marca {
+  color: var(--qh-gold);
+}
+
+.orbe[data-estado='escuchando'] .orbe__esfera {
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.35);
+}
+.orbe[data-estado='escuchando'] .orbe__esfera::after {
+  border-color: rgba(212, 175, 55, 0.5);
+  animation: qh-latido 1.4s ease-in-out infinite;
+}
+
+.orbe[data-estado='observando'] .orbe__esfera::after {
+  border-color: rgba(212, 175, 55, 0.35);
+  animation: qh-latido 2.6s ease-in-out infinite;
+}
+
+.orbe[data-estado='hablando'] .orbe__esfera {
+  border-color: var(--qh-gold);
+  animation: qh-pulso 780ms ease-in-out infinite;
+}
+
+.orbe[data-estado='conectando'] .orbe__esfera::after {
+  border-color: rgba(212, 175, 55, 0.55);
+  border-style: dashed;
+  animation: qh-giro 1.1s linear infinite;
+}
+
+.orbe[data-estado='dormido'] .orbe__esfera {
+  border-color: var(--qh-line);
+  opacity: 0.6;
+}
+
+.orbe[data-estado='error'] .orbe__esfera,
+.orbe[data-estado='frenado'] .orbe__esfera,
+.orbe[data-estado='sin-puente'] .orbe__esfera {
+  border-color: var(--qh-red);
+  box-shadow: 0 0 18px rgba(217, 83, 79, 0.3);
+}
+.orbe[data-estado='error'] .orbe__marca,
+.orbe[data-estado='frenado'] .orbe__marca,
+.orbe[data-estado='sin-puente'] .orbe__marca {
+  color: var(--qh-red);
+}
+
+@keyframes qh-latido {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.09);
+    opacity: 0.25;
+  }
+}
+
+@keyframes qh-pulso {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes qh-giro {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- acciones ------------------------------------------------------------ */
+
+.orbe__acciones {
+  display: flex;
+  gap: 5px;
+}
+
+.orbe__boton {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 8px;
+  opacity: 0.55;
+}
+
+.orbe__boton[data-on='true'] {
+  opacity: 1;
+  border-color: var(--qh-gold);
+  color: var(--qh-gold);
+}
+
+.orbe__boton--freno[data-on='true'],
+.orbe__boton--freno:hover {
+  border-color: var(--qh-red);
+  color: var(--qh-red);
+  opacity: 1;
+}
+
+/* --- cuerpo -------------------------------------------------------------- */
+
+.orbe__fuentes {
+  flex: 0 0 auto;
+  background: var(--qh-black-soft);
+  color: var(--qh-text);
+  border: 1px solid var(--qh-line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 12px;
+  width: 100%;
+}
+
+.orbe__aviso {
+  flex: 0 0 auto;
+  background: #2a1414;
+  border: 1px solid var(--qh-red);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #f0c7c5;
+  cursor: pointer;
+}
+
+.orbe__registro {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 2px;
+}
+
+.orbe__vacio {
+  margin: auto 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--qh-text-dim);
+  padding: 0 10px;
+}
+
+.turno {
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 7px 10px;
+  border-radius: 9px;
+  word-break: break-word;
+  max-width: 92%;
+}
+
+.turno[data-quien='yo'] {
+  align-self: flex-end;
+  background: #1d1a12;
+  border: 1px solid var(--qh-gold-dim);
+}
+
+.turno[data-quien='copiloto'] {
+  align-self: flex-start;
+  background: var(--qh-black-soft);
+  border: 1px solid var(--qh-line);
+}
+
+/* --- escribir ------------------------------------------------------------ */
+
+.orbe__escribir {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+}
+
+.orbe__escribir input {
+  flex: 1;
+  min-width: 0;
+  background: var(--qh-black);
+  color: var(--qh-text);
+  border: 1px solid var(--qh-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 12.5px;
+}
+
+.orbe__escribir input:focus {
+  outline: none;
+  border-color: var(--qh-gold-dim);
+}
+
+.orbe__escribir button {
+  width: 34px;
+  padding: 0;
+  font-size: 14px;
+}

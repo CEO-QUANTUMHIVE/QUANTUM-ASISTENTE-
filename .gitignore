@@ -1,0 +1,28 @@
+node_modules/
+dist/
+dist-electron/
+out/
+build/
+release/
+.vite/
+*.tsbuildinfo
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+.env
+.env.*
+!.env.example
+
+# Datos locales del usuario: capturas, sesiones, diario.
+# Nunca deben salir de la maquina sin consentimiento explicito.
+.qh-data/
+*.log
+
+.DS_Store
+Thumbs.db

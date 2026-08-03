@@ -1,0 +1,63 @@
+/* Identidad QuantumHive: negro y oro. Nada de cyan. */
+
+:root {
+  --qh-black: #0b0b0d;
+  --qh-black-soft: #141417;
+  --qh-line: #26262b;
+  --qh-gold: #d4af37;
+  --qh-gold-dim: #8a7328;
+  --qh-text: #ececef;
+  --qh-text-dim: #9a9aa2;
+  --qh-red: #d9534f;
+  --qh-green: #4f9d69;
+
+  --qh-radius: 10px;
+  --qh-font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --qh-mono: 'Cascadia Mono', 'Consolas', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--qh-font);
+  color: var(--qh-text);
+  /* El desborde horizontal se escapa si solo se tapa en body. */
+  overflow-x: hidden;
+}
+
+body {
+  background: transparent;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid var(--qh-line);
+  background: var(--qh-black-soft);
+  border-radius: var(--qh-radius);
+  padding: 6px 12px;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--qh-gold-dim);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.qh-drag {
+  -webkit-app-region: drag;
+}
+
+.qh-no-drag {
+  -webkit-app-region: no-drag;
+}
