@@ -3,8 +3,10 @@
 import { spawn } from 'node:child_process';
 import { app, shell } from 'electron';
 import {
+  esAccionNavegacion,
   esAplicacionPermitida,
   esCarpetaPermitida,
+  esDireccionDesplazamiento,
   normalizarUrl,
   textoRequerido,
   urlDeBusqueda,
@@ -13,6 +15,7 @@ import {
   type LlamadaHerramienta,
   type RespuestaHerramienta,
 } from './herramientas-definicion.js';
+import type { NavegadorQuantum } from './navegador.js';
 
 function lanzar(programa: string): Promise<void> {
   return new Promise((resolver, rechazar) => {
@@ -30,11 +33,13 @@ function lanzar(programa: string): Promise<void> {
   });
 }
 
-async function abrirAplicacion(nombre: AplicacionPermitida): Promise<string> {
+async function abrirAplicacion(
+  nombre: AplicacionPermitida,
+  navegador: NavegadorQuantum,
+): Promise<string> {
   switch (nombre) {
     case 'navegador':
-      await shell.openExternal('https://www.google.com');
-      return 'Abrí el navegador predeterminado.';
+      return navegador.abrir('https://www.google.com');
     case 'explorador':
       await lanzar('explorer.exe');
       return 'Abrí el Explorador de Windows.';
@@ -72,7 +77,10 @@ async function abrirCarpeta(nombre: CarpetaPermitida): Promise<string> {
   return `Abrí la carpeta ${nombre}.`;
 }
 
-async function ejecutarUna(llamada: LlamadaHerramienta): Promise<RespuestaHerramienta> {
+async function ejecutarUna(
+  llamada: LlamadaHerramienta,
+  navegador: NavegadorQuantum,
+): Promise<RespuestaHerramienta> {
   try {
     const args = llamada.args ?? {};
     let output: string;
@@ -80,26 +88,50 @@ async function ejecutarUna(llamada: LlamadaHerramienta): Promise<RespuestaHerram
     switch (llamada.name) {
       case 'abrir_url': {
         const url = normalizarUrl(args['url']);
-        await shell.openExternal(url);
-        output = `Abrí ${url}`;
+        output = await navegador.abrir(url);
         break;
       }
       case 'buscar_web': {
         const consulta = textoRequerido(args['consulta'], 'consulta');
-        await shell.openExternal(urlDeBusqueda(consulta));
-        output = `Abrí la búsqueda: ${consulta}`;
+        await navegador.abrir(urlDeBusqueda(consulta));
+        output = `Abrí la búsqueda en el Navegador Quantum: ${consulta}`;
         break;
       }
       case 'abrir_aplicacion': {
         const nombre = args['aplicacion'];
         if (!esAplicacionPermitida(nombre)) throw new Error('esa aplicación no está permitida');
-        output = await abrirAplicacion(nombre);
+        output = await abrirAplicacion(nombre, navegador);
         break;
       }
       case 'abrir_carpeta': {
         const nombre = args['carpeta'];
         if (!esCarpetaPermitida(nombre)) throw new Error('esa carpeta no está permitida');
         output = await abrirCarpeta(nombre);
+        break;
+      }
+      case 'inspeccionar_pagina': {
+        output = JSON.stringify(await navegador.inspeccionar());
+        break;
+      }
+      case 'hacer_click': {
+        output = await navegador.hacerClick(args['control'], args['confirmado'] === true);
+        break;
+      }
+      case 'escribir_en_pagina': {
+        const texto = textoRequerido(args['texto'], 'texto', 2000);
+        output = await navegador.escribir(args['control'], texto);
+        break;
+      }
+      case 'desplazar_pagina': {
+        const direccion = args['direccion'];
+        if (!esDireccionDesplazamiento(direccion)) throw new Error('direccion no permitida');
+        output = await navegador.desplazar(direccion);
+        break;
+      }
+      case 'navegar_pagina': {
+        const accion = args['accion'];
+        if (!esAccionNavegacion(accion)) throw new Error('accion de navegacion no permitida');
+        output = await navegador.navegar(accion);
         break;
       }
       default:
@@ -118,8 +150,9 @@ async function ejecutarUna(llamada: LlamadaHerramienta): Promise<RespuestaHerram
 
 export async function ejecutarHerramientas(
   llamadas: LlamadaHerramienta[],
+  navegador: NavegadorQuantum,
 ): Promise<RespuestaHerramienta[]> {
   const respuestas: RespuestaHerramienta[] = [];
-  for (const llamada of llamadas) respuestas.push(await ejecutarUna(llamada));
+  for (const llamada of llamadas) respuestas.push(await ejecutarUna(llamada, navegador));
   return respuestas;
 }

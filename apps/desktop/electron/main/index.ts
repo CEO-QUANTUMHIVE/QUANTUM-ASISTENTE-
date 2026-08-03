@@ -18,6 +18,7 @@ import { ejecutarHerramientas } from './herramientas.js';
 import type { LlamadaHerramienta } from './herramientas-definicion.js';
 import { ControlInactividad } from './inactividad.js';
 import { SesionLive } from './live/sesion.js';
+import { NavegadorQuantum } from './navegador.js';
 import { crearOrbe, expandirOrbe } from './ventanas.js';
 
 app.setName('Quantum Assistant');
@@ -32,6 +33,7 @@ let bandeja: Tray | null = null;
 let temporizadorVision: NodeJS.Timeout | null = null;
 
 const capturador = new ScreenCapturer();
+const navegador = new NavegadorQuantum();
 let sesion: SesionLive | null = null;
 
 const controlInactividad = new ControlInactividad({
@@ -126,7 +128,7 @@ async function conectar(): Promise<void> {
   sesion.on('herramientas', (llamadas: LlamadaHerramienta[]) => {
     controlInactividad.registrarActividad();
     const sesionActiva = sesion;
-    void ejecutarHerramientas(llamadas).then((respuestas) => {
+    void ejecutarHerramientas(llamadas, navegador).then((respuestas) => {
       if (sesion === sesionActiva) sesionActiva?.responderHerramientas(respuestas);
     });
   });
@@ -406,4 +408,5 @@ app.on('will-quit', () => {
   pararVision();
   sesion?.cerrar();
   bandeja?.destroy();
+  navegador.cerrar();
 });
