@@ -25,12 +25,14 @@ una versión lista para distribuir.
 
 ## Ejecutar en desarrollo
 
-Requisitos: Windows 10/11, Node.js 20+, pnpm y Google Cloud CLI.
+Requisitos: Windows 10/11, Node.js 20+ con Corepack y Google Cloud CLI. No es
+necesario instalar `pnpm` globalmente: Corepack usa la versión declarada por el
+repositorio.
 
 ```powershell
 gcloud auth login
-pnpm install
-pnpm dev
+corepack pnpm install
+corepack pnpm dev
 ```
 
 La cuenta autenticada necesita acceso al proyecto y a Vertex AI. La
@@ -39,7 +41,7 @@ configuración de ejemplo está en `.env.example`.
 Para generar el instalador de desarrollo:
 
 ```powershell
-pnpm dist:win
+corepack pnpm dist:win
 ```
 
 El archivo se crea en `apps/desktop/release/`. La edición pública requerirá el

@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "dist:win": "pnpm build && electron-builder --win nsis --x64",
+    "dist:win": "electron-vite build && electron-builder --win nsis --x64",
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run"

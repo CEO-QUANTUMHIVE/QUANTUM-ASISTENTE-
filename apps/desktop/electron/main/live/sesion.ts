@@ -22,6 +22,11 @@
 
 import { EventEmitter } from 'node:events';
 import WebSocket from 'ws';
+import {
+  HERRAMIENTAS_LIVE,
+  type LlamadaHerramienta,
+  type RespuestaHerramienta,
+} from '../herramientas-definicion.js';
 import { obtenerToken, olvidarToken } from './credenciales.js';
 import { armarInstruccion, type ContextoSesion } from './constitucion.js';
 
@@ -111,6 +116,7 @@ export class SesionLive extends EventEmitter {
               responseModalities: [this.soloAudio ? 'AUDIO' : 'TEXT'],
             },
             systemInstruction: { parts: [{ text: armarInstruccion(this.contexto) }] },
+            tools: HERRAMIENTAS_LIVE,
             // Con salida de audio, la transcripción no es opcional: el chat y
             // la memoria guardan texto, no un WAV.
             ...(this.soloAudio ? { outputAudioTranscription: {} } : {}),
@@ -238,6 +244,12 @@ export class SesionLive extends EventEmitter {
     });
   }
 
+  /** Devuelve a Gemini el resultado de las acciones pedidas por function calling. */
+  responderHerramientas(respuestas: RespuestaHerramienta[]): void {
+    if (!this.lista || respuestas.length === 0) return;
+    this.enviar({ toolResponse: { functionResponses: respuestas } });
+  }
+
   // No hay un `interrumpir()`: interrumpir no se manda, se hace hablando
   // encima. La detección de voz automática viene encendida (no se toca
   // `realtimeInputConfig`), el modelo se calla solo y avisa con `interrupted`,
@@ -263,6 +275,18 @@ export class SesionLive extends EventEmitter {
       this.cambiarEstado('lista');
       this.emit('lista');
       return;
+    }
+
+    const llamadas = mensaje['toolCall']?.functionCalls;
+    if (Array.isArray(llamadas) && llamadas.length > 0) {
+      const validas = llamadas.filter(
+        (llamada: unknown): llamada is LlamadaHerramienta =>
+          typeof llamada === 'object' &&
+          llamada !== null &&
+          typeof (llamada as LlamadaHerramienta).id === 'string' &&
+          typeof (llamada as LlamadaHerramienta).name === 'string',
+      );
+      if (validas.length > 0) this.emit('herramientas', validas);
     }
 
     const contenido = mensaje['serverContent'];

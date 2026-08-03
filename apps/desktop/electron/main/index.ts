@@ -14,6 +14,8 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Tray } from 'electron';
 import { CANALES, type EstadoOrbe } from '../canales.js';
 import { ScreenCapturer, listSources } from './capture.js';
+import { ejecutarHerramientas } from './herramientas.js';
+import type { LlamadaHerramienta } from './herramientas-definicion.js';
 import { ControlInactividad } from './inactividad.js';
 import { SesionLive } from './live/sesion.js';
 import { crearOrbe, expandirOrbe } from './ventanas.js';
@@ -120,6 +122,13 @@ async function conectar(): Promise<void> {
   sesion.on('transcripcion-usuario', (t: string) => {
     controlInactividad.registrarActividad();
     avisar(CANALES.transcripcionUsuario, t);
+  });
+  sesion.on('herramientas', (llamadas: LlamadaHerramienta[]) => {
+    controlInactividad.registrarActividad();
+    const sesionActiva = sesion;
+    void ejecutarHerramientas(llamadas).then((respuestas) => {
+      if (sesion === sesionActiva) sesionActiva?.responderHerramientas(respuestas);
+    });
   });
   sesion.on('turno-fin', () => {
     publicar({ hablando: false });

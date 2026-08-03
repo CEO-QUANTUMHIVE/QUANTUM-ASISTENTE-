@@ -9,11 +9,11 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
-    "dev": "pnpm --filter @quantumhive/assistant-desktop dev",
-    "dist:win": "pnpm --filter @quantumhive/assistant-desktop dist:win"
+    "build": "corepack pnpm -r build",
+    "typecheck": "corepack pnpm -r typecheck",
+    "test": "corepack pnpm -r test",
+    "dev": "corepack pnpm --filter @quantumhive/assistant-desktop dev",
+    "dist:win": "corepack pnpm --filter @quantumhive/assistant-desktop dist:win"
   },
   "devDependencies": {
     "typescript": "^5.7.3"
