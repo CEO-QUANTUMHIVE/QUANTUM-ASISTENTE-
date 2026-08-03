@@ -47,6 +47,8 @@ const api = {
     escuchar(CANALES.transcripcionUsuario, f),
   alTurnoFin: (f: () => void): Baja => escuchar(CANALES.turnoFin, f),
   alInterrumpido: (f: () => void): Baja => escuchar(CANALES.interrumpido, f),
+  alDesconexionInactividad: (f: (detalle: string) => void): Baja =>
+    escuchar(CANALES.desconexionInactividad, f),
   alError: (f: (detalle: string) => void): Baja => escuchar(CANALES.error, f),
 } as const;
 

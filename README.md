@@ -16,7 +16,9 @@ TradingView, conectores de brokers, panel financiero, servidor local ni Python.
 - Voz y transcripción de Gemini Live en Vertex AI.
 - Chat escrito.
 - Freno inmediato con `Ctrl+Shift+F12`.
+- Desconexión obligatoria: aviso tras 5 minutos sin respuesta y cierre 5 minutos después.
 - Conexión directa a Vertex para desarrollo local.
+- Empaquetado NSIS para Windows configurado (instalación por usuario y accesos directos).
 
 El micrófono debe verificarse con audio real en cada equipo antes de considerar
 una versión lista para distribuir.
@@ -33,6 +35,15 @@ pnpm dev
 
 La cuenta autenticada necesita acceso al proyecto y a Vertex AI. La
 configuración de ejemplo está en `.env.example`.
+
+Para generar el instalador de desarrollo:
+
+```powershell
+pnpm dist:win
+```
+
+El archivo se crea en `apps/desktop/release/`. La edición pública requerirá el
+gateway y firma digital antes de publicarse en la landing.
 
 ## Arquitectura
 
@@ -57,7 +68,7 @@ siguiente etapa del producto.
 Antes de construir una función, comprobar si Gemini ya sabe hacerla. Si la
 respuesta es sí, no se agrega otra capa.
 
-La desconexión por inactividad será obligatoria para proteger capacidad y
-costos de infraestructura. El tiempo exacto y el aviso se implementarán junto
-con el gateway, donde pueden aplicarse de forma confiable para todos los
-clientes.
+La desconexión por inactividad es obligatoria para proteger capacidad y costos:
+el escritorio ya aplica el aviso a los 5 minutos y el cierre 5 minutos después.
+El gateway repetirá la misma política del lado servidor para que ningún cliente
+pueda evitarla.

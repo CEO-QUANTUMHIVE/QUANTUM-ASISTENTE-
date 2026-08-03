@@ -14,6 +14,7 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Tray } from 'electron';
 import { CANALES, type EstadoOrbe } from '../canales.js';
 import { ScreenCapturer, listSources } from './capture.js';
+import { ControlInactividad } from './inactividad.js';
 import { SesionLive } from './live/sesion.js';
 import { crearOrbe, expandirOrbe } from './ventanas.js';
 
@@ -30,6 +31,29 @@ let temporizadorVision: NodeJS.Timeout | null = null;
 
 const capturador = new ScreenCapturer();
 let sesion: SesionLive | null = null;
+
+const controlInactividad = new ControlInactividad({
+  avisar: () => {
+    avisar(
+      CANALES.desconexionInactividad,
+      '¿Seguís ahí? Si no respondés en cinco minutos voy a desconectarme.',
+    );
+    sesion?.enviarTexto(
+      'Preguntale brevemente al usuario si todavía te necesita. Explicale que, si no responde, la sesión se cerrará en cinco minutos.',
+    );
+  },
+  desconectar: () => {
+    controlInactividad.detener();
+    pararVision();
+    sesion?.cerrar();
+    sesion = null;
+    publicar({ sesion: 'cerrada', hablando: false });
+    avisar(
+      CANALES.desconexionInactividad,
+      'Cerré la sesión por inactividad. Tocá el micrófono o escribime para volver.',
+    );
+  },
+});
 
 const estado: EstadoOrbe = {
   sesion: 'cerrada',
@@ -80,14 +104,23 @@ async function conectar(): Promise<void> {
 
   sesion = new SesionLive(configuracion());
 
-  sesion.on('estado', (s) => publicar({ sesion: s }));
-  sesion.on('lista', () => publicar({ sesion: 'lista', detalle: undefined }));
+  sesion.on('estado', (s) => {
+    if (s !== 'lista') controlInactividad.detener();
+    publicar({ sesion: s });
+  });
+  sesion.on('lista', () => {
+    controlInactividad.iniciar();
+    publicar({ sesion: 'lista', detalle: undefined });
+  });
   sesion.on('texto', (fragmento: string) => {
     publicar({ hablando: true });
     avisar(CANALES.textoModelo, fragmento);
   });
   sesion.on('audio', (pcm: Buffer) => avisar(CANALES.audioModelo, pcm));
-  sesion.on('transcripcion-usuario', (t: string) => avisar(CANALES.transcripcionUsuario, t));
+  sesion.on('transcripcion-usuario', (t: string) => {
+    controlInactividad.registrarActividad();
+    avisar(CANALES.transcripcionUsuario, t);
+  });
   sesion.on('turno-fin', () => {
     publicar({ hablando: false });
     avisar(CANALES.turnoFin);
@@ -166,6 +199,7 @@ async function mirar(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function frenar(): void {
+  controlInactividad.detener();
   pararVision();
   // El micrófono lo cierra el orbe cuando ve `frenado`: es el que lo tiene
   // abierto. Acá se corta lo que sí depende del proceso principal.
@@ -192,6 +226,7 @@ function registrarIpc(): void {
   });
 
   ipcMain.handle(CANALES.desconectar, () => {
+    controlInactividad.detener();
     sesion?.cerrar();
     sesion = null;
     pararVision();
@@ -209,6 +244,7 @@ function registrarIpc(): void {
 
   ipcMain.handle(CANALES.texto, (_evento, texto: unknown) => {
     if (typeof texto !== 'string' || !texto.trim() || estado.frenado) return false;
+    controlInactividad.registrarActividad();
     sesion?.enviarTexto(texto.trim());
     return true;
   });
@@ -357,6 +393,7 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  controlInactividad.detener();
   pararVision();
   sesion?.cerrar();
   bandeja?.destroy();

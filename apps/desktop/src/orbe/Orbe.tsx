@@ -93,6 +93,14 @@ export function Orbe(): JSX.Element {
         reproductor.current.vaciar();
         cerrarTurno();
       }),
+      qh.alDesconexionInactividad((detalle) => {
+        if (detalle.startsWith('Cerré')) {
+          microfono.current.parar();
+          reproductor.current.vaciar();
+          setEscuchando(false);
+        }
+        setAviso(detalle);
+      }),
       qh.alError((detalle) => setAviso(detalle)),
     ];
 

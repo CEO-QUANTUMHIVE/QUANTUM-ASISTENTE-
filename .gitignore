@@ -23,6 +23,7 @@ venv/
 # Nunca deben salir de la maquina sin consentimiento explicito.
 .qh-data/
 *.log
+graphify-out/
 
 .DS_Store
 Thumbs.db

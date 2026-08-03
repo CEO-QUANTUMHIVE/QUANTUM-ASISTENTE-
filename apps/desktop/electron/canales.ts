@@ -24,6 +24,7 @@ export const CANALES = {
   transcripcionUsuario: 'orbe:transcripcion-usuario',
   turnoFin: 'orbe:turno-fin',
   interrumpido: 'orbe:interrumpido',
+  desconexionInactividad: 'orbe:desconexion-inactividad',
   error: 'orbe:error',
 } as const;
 

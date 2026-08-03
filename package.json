@@ -12,7 +12,8 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @quantumhive/assistant-desktop dev"
+    "dev": "pnpm --filter @quantumhive/assistant-desktop dev",
+    "dist:win": "pnpm --filter @quantumhive/assistant-desktop dist:win"
   },
   "devDependencies": {
     "typescript": "^5.7.3"
