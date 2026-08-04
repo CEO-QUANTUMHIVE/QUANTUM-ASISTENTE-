@@ -14,6 +14,8 @@ export const CANALES = {
   listarFuentes: 'orbe:listar-fuentes',
   elegirFuente: 'orbe:elegir-fuente',
   vision: 'orbe:vision',
+  elegirVoz: 'orbe:elegir-voz',
+  probarVoz: 'orbe:probar-voz',
   expandir: 'orbe:expandir',
   frenar: 'orbe:frenar',
 
@@ -30,8 +32,30 @@ export const CANALES = {
 
 export type Canal = (typeof CANALES)[keyof typeof CANALES];
 
+/**
+ * Voces precargadas de Google para el modo voz. Elegir una no cuesta nada
+ * hasta que se conecta: se aplica recién en la próxima vez que se prenda el
+ * micrófono (la voz se fija al conectar, no se puede cambiar a mitad de
+ * sesión).
+ */
+export const VOCES_DISPONIBLES = ['Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede', 'Leda', 'Orus', 'Zephyr'] as const;
+export type VozDisponible = (typeof VOCES_DISPONIBLES)[number];
+
+/** Nombres propios, para que se entienda de un vistazo quién es varón y quién mujer. */
+export const NOMBRE_VOZ: Record<VozDisponible, string> = {
+  Puck: 'Mateo',
+  Charon: 'Bruno',
+  Fenrir: 'Nico',
+  Orus: 'Tomás',
+  Kore: 'Valentina',
+  Aoede: 'Camila',
+  Leda: 'Sofía',
+  Zephyr: 'Renata',
+};
+
 export interface EstadoOrbe {
   sesion: 'cerrada' | 'conectando' | 'lista' | 'error';
+  voz: VozDisponible;
   /**
    * No está `escuchando`: el micrófono vive en el orbe y el proceso principal
    * no tiene cómo saber si está abierto. Si lo publicara igual, cada vez que

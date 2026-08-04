@@ -12,18 +12,35 @@
  */
 
 import { app, BrowserWindow, globalShortcut, ipcMain, Menu, nativeImage, Tray } from 'electron';
-import { CANALES, type EstadoOrbe } from '../canales.js';
+import { CANALES, NOMBRE_VOZ, VOCES_DISPONIBLES, type EstadoOrbe, type VozDisponible } from '../canales.js';
 import { ScreenCapturer, listSources } from './capture.js';
 import { ejecutarHerramientas } from './herramientas.js';
 import type { LlamadaHerramienta } from './herramientas-definicion.js';
 import { ControlInactividad } from './inactividad.js';
 import { SesionLive } from './live/sesion.js';
 import { NavegadorQuantum } from './navegador.js';
+import { SesionTexto } from './sesion-texto.js';
 import { crearOrbe, expandirOrbe } from './ventanas.js';
 
 app.setName('Quantum Assistant');
 
 const ATAJO_FRENO = 'Control+Shift+F12';
+
+/**
+ * El saludo del modo voz, para el mic-on y para probar una voz. Con nombre
+ * propio e indicaciones de calidez, pausas y pronunciación: sin esto el
+ * modelo de audio nativo lee "Quantum" como se escribe en español y suena mal.
+ */
+function saludoVoz(voz: VozDisponible): string {
+  const nombre = NOMBRE_VOZ[voz];
+  return (
+    'Saludá una sola vez, con calidez y una sonrisa en la voz, hablando despacio y bien claro. ' +
+    'Pronunciá "Quantum" como se dice en inglés — "Kuantum" — nunca como se lee en español. ' +
+    `Decí exactamente esto, con una pausa breve después de "Hola" y otra después de "${nombre} de QuantumHive": ` +
+    `"Hola, soy ${nombre} de QuantumHive. ¿En qué te ayudo hoy?" ` +
+    'No agregues nada más ni digas que esto es una instrucción.'
+  );
+}
 
 /** La Live API acepta ~1 imagen por segundo. Muestrear más rápido es tirar CPU. */
 const INTERVALO_VISION_MS = 1000;
@@ -35,6 +52,21 @@ let temporizadorVision: NodeJS.Timeout | null = null;
 const capturador = new ScreenCapturer();
 const navegador = new NavegadorQuantum();
 let sesion: SesionLive | null = null;
+let sesionPrevia: SesionLive | null = null;
+let vozElegida: VozDisponible = 'Puck';
+
+// El modo texto no tiene conexión que mantener viva ni credenciales que
+// cambien en caliente: se crea una sola vez y se reusa siempre.
+const sesionTexto = new SesionTexto(configuracionTexto(), navegador);
+sesionTexto.on('texto', (fragmento: string) => {
+  publicar({ hablando: true });
+  avisar(CANALES.textoModelo, fragmento);
+});
+sesionTexto.on('turno-fin', () => {
+  publicar({ hablando: false });
+  avisar(CANALES.turnoFin);
+});
+sesionTexto.on('error', (detalle: string) => avisar(CANALES.error, detalle));
 
 const controlInactividad = new ControlInactividad({
   avisar: () => {
@@ -61,6 +93,7 @@ const controlInactividad = new ControlInactividad({
 
 const estado: EstadoOrbe = {
   sesion: 'cerrada',
+  voz: vozElegida,
   observando: false,
   hablando: false,
   frenado: false,
@@ -92,7 +125,7 @@ function avisar(canal: string, carga?: unknown): void {
 }
 
 // ---------------------------------------------------------------------------
-// Sesión con el modelo
+// Sesión de voz (Live API, audio nativo)
 // ---------------------------------------------------------------------------
 
 function configuracion() {
@@ -100,10 +133,25 @@ function configuracion() {
     proyecto: process.env['GCP_PROJECT_ID'] ?? 'bubbly-stone-502214-u7',
     region: process.env['GCP_REGION'] ?? 'us-east4',
     modelo: process.env['GEMINI_LIVE_MODEL'] ?? 'gemini-live-2.5-flash-native-audio',
+    voz: vozElegida,
+  };
+}
+
+/** El modo texto usa un modelo de texto estándar, aparte y mucho más barato. */
+function configuracionTexto() {
+  return {
+    proyecto: process.env['GCP_PROJECT_ID'] ?? 'bubbly-stone-502214-u7',
+    region: process.env['GCP_REGION'] ?? 'us-east4',
+    modelo: process.env['GEMINI_TEXT_MODEL'] ?? 'gemini-2.5-flash',
   };
 }
 
 async function conectar(): Promise<void> {
+  // Ya está lista: no hay nada que hacer. Sin esto, cada mensaje de texto o
+  // cada click en el micrófono tirarían la sesión abajo y la reconectarían de
+  // nuevo, perdiendo el contexto por las puras.
+  if (sesion !== null && sesion.lista) return;
+
   if (sesion !== null) sesion.cerrar();
 
   sesion = new SesionLive(configuracion());
@@ -155,6 +203,11 @@ async function conectar(): Promise<void> {
 // Visión
 // ---------------------------------------------------------------------------
 
+/** El modo texto arma su propio prompt en cada pedido; que lea lo mismo que ve el modo voz. */
+function sincronizarContextoTexto(): void {
+  sesionTexto.actualizarContexto({ observando: estado.observando, ventana: estado.ventana });
+}
+
 function arrancarVision(): void {
   if (temporizadorVision !== null) return;
   fallosSeguidos = 0;
@@ -162,6 +215,7 @@ function arrancarVision(): void {
     void mirar();
   }, INTERVALO_VISION_MS);
   publicar({ observando: true });
+  sincronizarContextoTexto();
 }
 
 function pararVision(): void {
@@ -170,6 +224,7 @@ function pararVision(): void {
     temporizadorVision = null;
   }
   publicar({ observando: false });
+  sincronizarContextoTexto();
 }
 
 /**
@@ -218,11 +273,11 @@ function frenar(): void {
   sesion?.cerrar();
   sesion = null;
   publicar({ sesion: 'cerrada' });
+  sesionTexto.reiniciar();
 }
 
 function soltarFreno(): void {
   publicar({ frenado: false });
-  void conectar();
 }
 
 // ---------------------------------------------------------------------------
@@ -230,9 +285,15 @@ function soltarFreno(): void {
 // ---------------------------------------------------------------------------
 
 function registrarIpc(): void {
+  // Este canal sólo lo pide el orbe al prender el micrófono: conecta (o
+  // reusa) la sesión de voz y siempre saluda, haya hecho falta reconectar o
+  // no. Es la única manera de garantizar el saludo en cada mic-on: si sólo
+  // saludara al conectar de cero, prender-apagar-prender se quedaría mudo la
+  // segunda vez porque la sesión ya estaba lista.
   ipcMain.handle(CANALES.conectar, async () => {
     if (estado.frenado) soltarFreno();
-    else await conectar();
+    await conectar();
+    if (sesion?.lista) sesion.enviarTexto(saludoVoz(vozElegida));
     return estado;
   });
 
@@ -253,20 +314,74 @@ function registrarIpc(): void {
     sesion?.enviarAudio(Buffer.from(pcm));
   });
 
-  ipcMain.handle(CANALES.texto, (_evento, texto: unknown) => {
+  // El texto siempre está disponible: no hay conexión que mantener viva acá,
+  // sólo un pedido HTTP con el historial completo. Si la visión está
+  // prendida, se le adjunta el cuadro actual para que conteste sobre lo que
+  // se ve, igual que en modo voz.
+  ipcMain.handle(CANALES.texto, async (_evento, texto: unknown) => {
     if (typeof texto !== 'string' || !texto.trim() || estado.frenado) return false;
     controlInactividad.registrarActividad();
-    sesion?.enviarTexto(texto.trim());
+    let cuadro: string | null = null;
+    if (estado.observando && capturador.selectedSource !== null) {
+      try {
+        cuadro = (await capturador.capture('conversation')).jpegBase64;
+      } catch {
+        cuadro = null;
+      }
+    }
+    void sesionTexto.responder(texto.trim(), cuadro);
     return true;
   });
 
   ipcMain.handle(CANALES.listarFuentes, async () => listSources());
 
-  ipcMain.handle(CANALES.elegirFuente, (_evento, id: unknown) => {
+  ipcMain.handle(CANALES.elegirFuente, (_evento, id: unknown, nombre: unknown) => {
     if (typeof id !== 'string' || !id) return estado;
     capturador.select(id);
-    publicar({ fuente: id });
+    publicar({ fuente: id, ventana: typeof nombre === 'string' ? nombre : estado.ventana });
+    sincronizarContextoTexto();
     return estado;
+  });
+
+  ipcMain.handle(CANALES.elegirVoz, (_evento, voz: unknown) => {
+    if (typeof voz !== 'string' || !(VOCES_DISPONIBLES as readonly string[]).includes(voz)) return estado;
+    vozElegida = voz as VozDisponible;
+    publicar({ voz: vozElegida });
+    // La voz se fija al conectar: si había una sesión de voz abierta, se
+    // cierra para que el próximo mic-on reconecte ya con la voz nueva.
+    sesion?.cerrar();
+    sesion = null;
+    publicar({ sesion: 'cerrada' });
+    return estado;
+  });
+
+  // Una sesión de voz descartable, sólo para que se escuche antes de elegir:
+  // conecta, dice una frase cortita con esa voz, y se cierra sola.
+  ipcMain.handle(CANALES.probarVoz, async (_evento, voz: unknown) => {
+    if (typeof voz !== 'string' || !(VOCES_DISPONIBLES as readonly string[]).includes(voz)) return false;
+    const vozPedida = voz as VozDisponible;
+
+    sesionPrevia?.cerrar();
+    sesionPrevia = new SesionLive({ ...configuracion(), voz: vozPedida });
+    const previa = sesionPrevia;
+
+    previa.on('audio', (pcm: Buffer) => {
+      publicar({ hablando: true });
+      avisar(CANALES.audioModelo, pcm);
+    });
+    const terminar = () => {
+      publicar({ hablando: false });
+      avisar(CANALES.turnoFin);
+      if (sesionPrevia === previa) sesionPrevia = null;
+      previa.cerrar();
+    };
+    previa.on('turno-fin', terminar);
+    previa.on('error', terminar);
+
+    await previa.conectar({ observando: false });
+    if (previa.lista) previa.enviarTexto(saludoVoz(vozPedida));
+    else terminar();
+    return true;
   });
 
   ipcMain.handle(CANALES.vision, (_evento, encendida: unknown) => {
@@ -372,7 +487,7 @@ async function fotografiar(dir: string): Promise<void> {
   await esperar(1200);
 
   const fuentes = await listSources();
-  const elegida = fuentes.find((f) => f.kind === 'window') ?? fuentes[0];
+  const elegida = fuentes[0];
   if (elegida !== undefined) {
     capturador.select(elegida.source_id);
     publicar({ fuente: elegida.source_id, ventana: elegida.name });

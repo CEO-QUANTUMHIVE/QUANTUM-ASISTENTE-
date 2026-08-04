@@ -166,35 +166,53 @@ export class NavegadorQuantum {
     return this.ejecutar<EstadoPagina>(codigoInspeccion());
   }
 
-  async hacerClick(control: unknown, confirmado: boolean): Promise<string> {
+  async hacerClick(control: unknown, confirmado: boolean, textoRespaldo?: string): Promise<string> {
     const indice = indiceDeControl(control);
+    const respaldo = (textoRespaldo ?? '').trim().slice(0, 180);
     const datos = await this.ejecutar<{
       existe: boolean;
       etiqueta: string;
       sensible: boolean;
       protegido: boolean;
+      porRespaldo: boolean;
     }>(`(() => {
-      const elemento = globalThis.__quantumControls?.[${indice}];
-      if (!elemento || !elemento.isConnected) return { existe: false, etiqueta: '', sensible: false, protegido: false };
-      const etiqueta = String(elemento.getAttribute('aria-label') || elemento.innerText || elemento.getAttribute('value') || '').replace(/\\s+/g, ' ').trim().slice(0, 180);
-      const tipo = String(elemento.getAttribute('type') || '').toLowerCase();
-      const autocomplete = String(elemento.getAttribute('autocomplete') || '').toLowerCase();
-      return {
-        existe: true,
-        etiqueta,
-        sensible: /\\b(comprar|pagar|purchase|buy|checkout|place order|borrar|eliminar|delete|remove|publicar|publish|enviar|send|submit|confirmar|confirm|autorizar|authorize)\\b/i.test(etiqueta),
-        protegido: tipo === 'password' || tipo === 'file' || autocomplete.includes('password') || autocomplete.startsWith('cc-'),
+      const limpiar = (valor) => String(valor || '').replace(/\\s+/g, ' ').trim();
+      const sensiblePatron = /\\b(comprar|pagar|purchase|buy|checkout|place order|borrar|eliminar|delete|remove|publicar|publish|enviar|send|submit|confirmar|confirm|autorizar|authorize)\\b/i;
+      const describir = (elemento, porRespaldo) => {
+        const etiqueta = limpiar(elemento.getAttribute('aria-label') || elemento.innerText || elemento.getAttribute('value')).slice(0, 180);
+        const tipo = String(elemento.getAttribute('type') || '').toLowerCase();
+        const autocomplete = String(elemento.getAttribute('autocomplete') || '').toLowerCase();
+        return {
+          existe: true,
+          etiqueta,
+          sensible: sensiblePatron.test(etiqueta),
+          protegido: tipo === 'password' || tipo === 'file' || autocomplete.includes('password') || autocomplete.startsWith('cc-'),
+          porRespaldo,
+        };
       };
+      let elemento = globalThis.__quantumControls?.[${indice}];
+      if (elemento && elemento.isConnected) {
+        globalThis.__quantumClickObjetivo = elemento;
+        return describir(elemento, false);
+      }
+      const respaldo = ${JSON.stringify(respaldo)};
+      if (!respaldo) return { existe: false, etiqueta: '', sensible: false, protegido: false, porRespaldo: false };
+      const candidatos = Array.from(globalThis.__quantumControls || []).filter((elemento) => elemento && elemento.isConnected);
+      elemento = candidatos.find((elemento) => limpiar(elemento.getAttribute('aria-label') || elemento.innerText || elemento.getAttribute('value')) === respaldo)
+        || candidatos.find((elemento) => limpiar(elemento.getAttribute('aria-label') || elemento.innerText || elemento.getAttribute('value')).includes(respaldo));
+      if (!elemento) return { existe: false, etiqueta: '', sensible: false, protegido: false, porRespaldo: false };
+      globalThis.__quantumClickObjetivo = elemento;
+      return describir(elemento, true);
     })()`);
 
-    if (!datos.existe) throw new Error('el control cambio; inspecciona la pagina nuevamente');
+    if (!datos.existe) throw new Error('el control cambio y no encontre nada parecido; inspecciona la pagina nuevamente');
     if (datos.protegido) throw new Error('no se puede interactuar con un campo protegido');
     if ((datos.sensible || esEtiquetaSensible(datos.etiqueta)) && !confirmado) {
       throw new Error(`CONFIRMACION_REQUERIDA: ${datos.etiqueta || String(control)}`);
     }
 
     const resultado = await this.ejecutar<{ ok: boolean }>(`(() => {
-      const elemento = globalThis.__quantumControls?.[${indice}];
+      const elemento = globalThis.__quantumClickObjetivo;
       if (!elemento || !elemento.isConnected) return { ok: false };
       elemento.scrollIntoView({ block: 'center', inline: 'center' });
       elemento.focus();
@@ -202,15 +220,36 @@ export class NavegadorQuantum {
       return { ok: true };
     })()`, true);
     if (!resultado.ok) throw new Error('el control cambio; inspecciona la pagina nuevamente');
-    return `Hice clic en ${datos.etiqueta || String(control)}.`;
+    return datos.porRespaldo
+      ? `El identificador había cambiado; encontré "${datos.etiqueta || respaldo}" por el texto y le hice clic.`
+      : `Hice clic en ${datos.etiqueta || String(control)}.`;
   }
 
-  async escribir(control: unknown, texto: string): Promise<string> {
+  async escribir(control: unknown, texto: string, etiquetaRespaldo?: string): Promise<string> {
     const indice = indiceDeControl(control);
     const contenido = texto.slice(0, 2000);
-    const resultado = await this.ejecutar<{ ok: boolean; error?: string; etiqueta?: string }>(`(() => {
-      const elemento = globalThis.__quantumControls?.[${indice}];
-      if (!elemento || !elemento.isConnected) return { ok: false, error: 'el control cambio' };
+    const respaldo = (etiquetaRespaldo ?? '').trim().slice(0, 180);
+    const resultado = await this.ejecutar<{ ok: boolean; error?: string; etiqueta?: string; porRespaldo?: boolean }>(`(() => {
+      const limpiar = (valor) => String(valor || '').replace(/\\s+/g, ' ').trim();
+      const describe = (elemento) => limpiar(
+        elemento.getAttribute('aria-label') || elemento.getAttribute('placeholder') || elemento.getAttribute('name') || ''
+      );
+      let elemento = globalThis.__quantumControls?.[${indice}];
+      let porRespaldo = false;
+      if (!elemento || !elemento.isConnected) {
+        const respaldo = ${JSON.stringify(respaldo)};
+        if (!respaldo) return { ok: false, error: 'el control cambio' };
+        const selector = 'input:not([type="hidden"]), textarea, [contenteditable="true"]';
+        const candidatos = Array.from(document.querySelectorAll(selector)).filter((elemento) => {
+          const estilo = getComputedStyle(elemento);
+          const rect = elemento.getBoundingClientRect();
+          return estilo.visibility !== 'hidden' && estilo.display !== 'none' && rect.width > 0 && rect.height > 0;
+        });
+        elemento = candidatos.find((candidato) => describe(candidato) === respaldo)
+          || candidatos.find((candidato) => describe(candidato).includes(respaldo));
+        if (!elemento) return { ok: false, error: 'el control cambio y no encontre un campo parecido' };
+        porRespaldo = true;
+      }
       const tipo = String(elemento.getAttribute('type') || '').toLowerCase();
       const autocomplete = String(elemento.getAttribute('autocomplete') || '').toLowerCase();
       if (tipo === 'password' || tipo === 'file' || autocomplete.includes('password') || autocomplete.startsWith('cc-')) {
@@ -230,10 +269,16 @@ export class NavegadorQuantum {
       }
       elemento.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: valor }));
       elemento.dispatchEvent(new Event('change', { bubbles: true }));
-      return { ok: true, etiqueta: String(elemento.getAttribute('aria-label') || elemento.getAttribute('name') || elemento.getAttribute('placeholder') || '').slice(0, 120) };
+      return {
+        ok: true,
+        etiqueta: String(elemento.getAttribute('aria-label') || elemento.getAttribute('name') || elemento.getAttribute('placeholder') || '').slice(0, 120),
+        porRespaldo,
+      };
     })()`, true);
     if (!resultado.ok) throw new Error(resultado.error ?? 'no se pudo escribir en el control');
-    return `Escribí en ${resultado.etiqueta || String(control)}.`;
+    return resultado.porRespaldo
+      ? `El identificador había cambiado; encontré el campo "${resultado.etiqueta || respaldo}" por su etiqueta y escribí ahí.`
+      : `Escribí en ${resultado.etiqueta || String(control)}.`;
   }
 
   async desplazar(direccion: DireccionDesplazamiento): Promise<string> {

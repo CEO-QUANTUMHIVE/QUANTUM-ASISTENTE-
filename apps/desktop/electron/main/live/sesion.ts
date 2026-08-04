@@ -45,6 +45,8 @@ export interface OpcionesSesion {
   proyecto: string;
   region: string;
   modelo: string;
+  /** Nombre de una voz precargada de Google (Puck, Kore, etc). Sin esto, Puck. */
+  voz?: string;
 }
 
 export type EstadoSesion = 'cerrada' | 'conectando' | 'lista' | 'error';
@@ -114,9 +116,22 @@ export class SesionLive extends EventEmitter {
             model: this.modeloCompleto,
             generationConfig: {
               responseModalities: [this.soloAudio ? 'AUDIO' : 'TEXT'],
+              ...(this.opciones.voz
+                ? { speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: this.opciones.voz } } } }
+                : {}),
             },
             systemInstruction: { parts: [{ text: armarInstruccion(this.contexto) }] },
             tools: HERRAMIENTAS_LIVE,
+            // Sensibilidad baja: evita que el modelo se auto-interrumpa al
+            // escucharse a sí mismo cuando el audio sale por parlantes.
+            realtimeInputConfig: {
+              automaticActivityDetection: {
+                startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
+                endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
+                prefixPaddingMs: 300,
+                silenceDurationMs: 900,
+              },
+            },
             // Con salida de audio, la transcripción no es opcional: el chat y
             // la memoria guardan texto, no un WAV.
             ...(this.soloAudio ? { outputAudioTranscription: {} } : {}),
@@ -251,11 +266,11 @@ export class SesionLive extends EventEmitter {
   }
 
   // No hay un `interrumpir()`: interrumpir no se manda, se hace hablando
-  // encima. La detección de voz automática viene encendida (no se toca
-  // `realtimeInputConfig`), el modelo se calla solo y avisa con `interrupted`,
-  // que ya se maneja más abajo. Los `activityStart`/`activityEnd` son de la
-  // otra modalidad —la manual— y con la automática encendida el servidor los
-  // rechaza.
+  // encima. La detección de voz automática viene encendida (con sensibilidad
+  // baja, ver `realtimeInputConfig` en `conectar()`), el modelo se calla solo
+  // y avisa con `interrupted`, que ya se maneja más abajo. Los
+  // `activityStart`/`activityEnd` son de la otra modalidad —la manual— y con
+  // la automática encendida el servidor los rechaza.
 
   private enviar(mensaje: unknown): void {
     this.ws?.send(JSON.stringify(mensaje));

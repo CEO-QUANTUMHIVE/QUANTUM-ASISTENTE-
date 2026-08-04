@@ -17,7 +17,6 @@ export type CapturePurpose = 'passive' | 'conversation' | 'analysis';
 export interface SourceInfo {
   source_id: string;
   name: string;
-  kind: 'screen' | 'window';
   thumbnail_data_url?: string;
 }
 
@@ -48,21 +47,24 @@ const CHANGE_THRESHOLD: Record<CapturePurpose, number> = {
 
 const JPEG_QUALITY = 72;
 
-export async function listSources(kinds: Array<'screen' | 'window'> = ['window', 'screen']): Promise<SourceInfo[]> {
+/**
+ * Solo pantallas completas, no ventanas sueltas. Elegir entre "pestañas" de
+ * cada ventana era el detalle que más se rompía y el que menos hacía falta:
+ * con ver la pantalla entera alcanza, y detectar cuántos monitores hay es
+ * mucho menos frágil que listar ventanas (que cambian todo el tiempo).
+ */
+export async function listSources(): Promise<SourceInfo[]> {
   const sources = await desktopCapturer.getSources({
-    types: kinds,
+    types: ['screen'],
     thumbnailSize: { width: 320, height: 180 },
     fetchWindowIcons: false,
   });
 
-  return sources
-    .filter((source) => source.name.trim().length > 0)
-    .map((source) => ({
-      source_id: source.id,
-      name: source.name,
-      kind: source.id.startsWith('screen:') ? ('screen' as const) : ('window' as const),
-      thumbnail_data_url: source.thumbnail.isEmpty() ? undefined : source.thumbnail.toDataURL(),
-    }));
+  return sources.map((source, indice) => ({
+    source_id: source.id,
+    name: `Pantalla ${indice + 1}`,
+    thumbnail_data_url: source.thumbnail.isEmpty() ? undefined : source.thumbnail.toDataURL(),
+  }));
 }
 
 export class ScreenCapturer {
@@ -114,7 +116,7 @@ export class ScreenCapturer {
     const scale = Math.min(1, targetWidth / displaySize.width);
 
     const sources = await desktopCapturer.getSources({
-      types: ['window', 'screen'],
+      types: ['screen'],
       thumbnailSize: {
         width: Math.round(displaySize.width * scale),
         height: Math.round(displaySize.height * scale),
@@ -124,7 +126,7 @@ export class ScreenCapturer {
 
     const source = sources.find((candidate) => candidate.id === this.sourceId);
     if (source === undefined) {
-      throw new Error('La ventana que estabas observando ya no existe.');
+      throw new Error('Esa pantalla ya no está conectada.');
     }
 
     const image = source.thumbnail;

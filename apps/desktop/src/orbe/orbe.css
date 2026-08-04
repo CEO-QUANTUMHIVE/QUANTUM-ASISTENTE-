@@ -11,6 +11,7 @@ body,
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: relative;
 }
 
 /* Colapsado: sólo la esfera, centrada y sin fondo. */
@@ -35,28 +36,34 @@ body,
   flex: 0 0 auto;
 }
 
-.orbe--abierto .orbe__cabecera {
-  justify-content: space-between;
+.orbe__titulo {
+  flex: 1;
+  font-family: var(--qh-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--qh-text);
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .orbe__esfera {
-  width: 84px;
-  height: 84px;
+  width: 108px;
+  height: 108px;
   padding: 0;
-  border-radius: 50%;
-  border: 2px solid var(--qh-gold-dim);
-  background: radial-gradient(circle at 35% 30%, #1c1c21 0%, #0b0b0d 70%);
+  border: none;
+  background: transparent;
   display: grid;
   place-items: center;
   position: relative;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
   flex: 0 0 auto;
 }
 
 .orbe--abierto .orbe__esfera {
-  width: 40px;
-  height: 40px;
-  border-width: 1.5px;
+  width: 48px;
+  height: 48px;
 }
 
 .orbe__marca {
@@ -73,80 +80,70 @@ body,
   font-size: 12px;
 }
 
-.orbe__esfera::after {
-  content: '';
-  position: absolute;
-  inset: -7px;
-  border-radius: 50%;
-  border: 1px solid transparent;
-  transition: border-color 200ms ease;
+.orbe__logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.85;
+  filter: drop-shadow(0 0 0 transparent);
+  transition: filter 200ms ease, opacity 200ms ease, transform 200ms ease;
 }
 
 /* Un estado por cada cosa que puede estar pasando. Sin esto, el orbe es un
-   círculo mudo y no se sabe si te escucha, si te mira o si se cayó. */
+   logo mudo y no se sabe si te escucha, si te mira o si se cayó. */
 
-.orbe[data-estado='lista'] .orbe__esfera,
-.orbe[data-estado='observando'] .orbe__esfera,
-.orbe[data-estado='escuchando'] .orbe__esfera {
-  border-color: var(--qh-gold);
-}
 .orbe[data-estado='lista'] .orbe__marca,
-.orbe[data-estado='observando'] .orbe__marca,
 .orbe[data-estado='escuchando'] .orbe__marca,
 .orbe[data-estado='hablando'] .orbe__marca {
   color: var(--qh-gold);
 }
 
-.orbe[data-estado='escuchando'] .orbe__esfera {
-  box-shadow: 0 0 20px rgba(212, 175, 55, 0.35);
+.orbe[data-estado='lista'] .orbe__logo,
+.orbe[data-estado='escuchando'] .orbe__logo,
+.orbe[data-estado='hablando'] .orbe__logo {
+  opacity: 1;
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.65));
 }
-.orbe[data-estado='escuchando'] .orbe__esfera::after {
-  border-color: rgba(212, 175, 55, 0.5);
+
+.orbe[data-estado='escuchando'] .orbe__logo {
   animation: qh-latido 1.4s ease-in-out infinite;
 }
 
-.orbe[data-estado='observando'] .orbe__esfera::after {
-  border-color: rgba(212, 175, 55, 0.35);
-  animation: qh-latido 2.6s ease-in-out infinite;
-}
-
-.orbe[data-estado='hablando'] .orbe__esfera {
-  border-color: var(--qh-gold);
+.orbe[data-estado='hablando'] .orbe__logo {
   animation: qh-pulso 780ms ease-in-out infinite;
 }
 
-.orbe[data-estado='conectando'] .orbe__esfera::after {
-  border-color: rgba(212, 175, 55, 0.55);
-  border-style: dashed;
-  animation: qh-giro 1.1s linear infinite;
+.orbe[data-estado='conectando'] .orbe__logo {
+  animation: qh-giro-suave 1.6s ease-in-out infinite;
 }
 
-.orbe[data-estado='dormido'] .orbe__esfera {
-  border-color: var(--qh-line);
-  opacity: 0.6;
+.orbe[data-estado='dormido'] .orbe__logo {
+  opacity: 0.55;
 }
 
-.orbe[data-estado='error'] .orbe__esfera,
-.orbe[data-estado='frenado'] .orbe__esfera,
-.orbe[data-estado='sin-puente'] .orbe__esfera {
-  border-color: var(--qh-red);
-  box-shadow: 0 0 18px rgba(217, 83, 79, 0.3);
-}
 .orbe[data-estado='error'] .orbe__marca,
 .orbe[data-estado='frenado'] .orbe__marca,
 .orbe[data-estado='sin-puente'] .orbe__marca {
   color: var(--qh-red);
+}
+.orbe[data-estado='error'] .orbe__logo,
+.orbe[data-estado='frenado'] .orbe__logo,
+.orbe[data-estado='sin-puente'] .orbe__logo {
+  opacity: 1;
+  filter: drop-shadow(0 0 10px rgba(217, 83, 79, 0.6));
 }
 
 @keyframes qh-latido {
   0%,
   100% {
     transform: scale(1);
-    opacity: 0.85;
+    opacity: 1;
   }
   50% {
-    transform: scale(1.09);
-    opacity: 0.25;
+    transform: scale(1.05);
+    opacity: 0.8;
   }
 }
 
@@ -160,9 +157,111 @@ body,
   }
 }
 
-@keyframes qh-giro {
+@keyframes qh-giro-suave {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --- viva: mirando ---------------------------------------------------------
+   Capa aparte del logo, así conviven con el brillo dorado de hablar/escuchar
+   en vez de pelear por el mismo `filter`. Es la única vez que se sale de la
+   paleta negro-y-oro: acá sí, a propósito, para que se note que respira. */
+
+.orbe__esfera {
+  --qh-radio-vida: 56px;
+}
+
+.orbe--abierto .orbe__esfera {
+  --qh-radio-vida: 24px;
+}
+
+.orbe__vida {
+  position: absolute;
+  inset: -16px;
+  pointer-events: none;
+}
+
+.orbe--abierto .orbe__vida {
+  inset: -8px;
+}
+
+.orbe__vida-aro {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.orbe__vida-aro--verde {
+  background: radial-gradient(circle, rgba(79, 220, 150, 0.55) 0%, rgba(79, 220, 150, 0) 68%);
+  animation: qh-respirar 2.2s ease-in-out infinite;
+}
+
+.orbe__vida-aro--energia {
+  /* Sin `mix-blend-mode`: en una ventana transparente y sin marco, Electron
+     compone mal los blends y termina rompiendo el resto de la interfaz. */
+  background: conic-gradient(
+    from 0deg,
+    rgba(151, 92, 255, 0.45),
+    rgba(64, 220, 220, 0.45),
+    rgba(151, 92, 255, 0.45)
+  );
+  filter: blur(7px);
+  opacity: 0.6;
+  animation: qh-girar-aro 5s linear infinite;
+}
+
+.orbe__chispa {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #d3fff0 0%, rgba(120, 255, 210, 0) 70%);
+  opacity: 0;
+  animation: qh-chispa 2.4s ease-in-out infinite;
+  animation-delay: calc(var(--i) * 0.32s);
+}
+
+@keyframes qh-respirar {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.95;
+  }
+}
+
+@keyframes qh-girar-aro {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes qh-chispa {
+  0% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 60deg)) translateY(calc(var(--qh-radio-vida) * -0.7));
+  }
+  20% {
+    opacity: 1;
+    transform: rotate(calc(var(--i) * 60deg)) translateY(calc(var(--qh-radio-vida) * -1));
+  }
+  55% {
+    opacity: 0;
+    transform: rotate(calc(var(--i) * 60deg)) translateY(calc(var(--qh-radio-vida) * -1.3));
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -196,18 +295,136 @@ body,
   opacity: 1;
 }
 
+/* Micrófono: el patrón de punto rojo titilando, como cualquier grabador. */
+.orbe__mic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 11px;
+  border-radius: 8px;
+  color: var(--qh-text-dim);
+}
+
+.orbe__mic-punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--qh-red);
+  opacity: 0.35;
+  flex: 0 0 auto;
+}
+
+.orbe__mic[data-on='true'] {
+  border-color: var(--qh-red);
+  color: var(--qh-text);
+}
+
+.orbe__mic[data-on='true'] .orbe__mic-punto {
+  opacity: 1;
+  box-shadow: 0 0 6px 1px rgba(217, 83, 79, 0.7);
+  animation: qh-parpadeo 1s steps(2, jump-none) infinite;
+}
+
+@keyframes qh-parpadeo {
+  50% {
+    opacity: 0.25;
+    box-shadow: none;
+  }
+}
+
+/* Voces: nombres para elegir y, al tocarlos, escuchar esa voz al toque. */
+.orbe__voces {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.orbe__voz-chip {
+  padding: 6px 2px;
+  background: var(--qh-black-soft);
+  color: var(--qh-text-dim);
+  border: 1px solid var(--qh-line);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 11px;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+}
+
+.orbe__voz-chip:hover:not(:disabled) {
+  border-color: var(--qh-gold-dim);
+  color: var(--qh-text);
+}
+
+.orbe__voz-chip[data-activa='true'] {
+  border-color: var(--qh-gold);
+  background: #1d1a12;
+  color: var(--qh-gold);
+}
+
+.orbe__voz-chip:disabled {
+  opacity: 0.5;
+}
+
 /* --- cuerpo -------------------------------------------------------------- */
 
-.orbe__fuentes {
+/* Resumen compacto: lo que hay en el chat cuando el selector está cerrado. */
+.orbe__fuentes-resumen {
   flex: 0 0 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
   background: var(--qh-black-soft);
   color: var(--qh-text);
   border: 1px solid var(--qh-line);
   border-radius: 8px;
-  padding: 6px 8px;
-  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+.orbe__fuentes-resumen:hover {
+  border-color: var(--qh-gold-dim);
+}
+
+.orbe__fuentes-resumen[data-observando='true'] {
+  border-color: var(--qh-green);
+}
+
+.orbe__fuentes-resumen-punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--qh-green);
+  box-shadow: 0 0 6px 1px rgba(79, 157, 105, 0.7);
+  flex: 0 0 auto;
+  animation: qh-parpadeo 1.6s steps(2, jump-none) infinite;
+}
+
+.orbe__fuentes-resumen-texto {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
   font-size: 12px;
-  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.orbe__fuentes-resumen-flecha {
+  color: var(--qh-text-dim);
+  font-size: 10px;
+}
+
+.orbe__pantallas-vacio {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 6px 2px;
+  font-size: 11px;
+  color: var(--qh-text-dim);
 }
 
 .orbe__aviso {

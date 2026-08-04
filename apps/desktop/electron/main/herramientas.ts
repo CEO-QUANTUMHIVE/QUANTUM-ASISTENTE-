@@ -114,12 +114,14 @@ async function ejecutarUna(
         break;
       }
       case 'hacer_click': {
-        output = await navegador.hacerClick(args['control'], args['confirmado'] === true);
+        const textoRespaldo = typeof args['texto'] === 'string' ? args['texto'] : undefined;
+        output = await navegador.hacerClick(args['control'], args['confirmado'] === true, textoRespaldo);
         break;
       }
       case 'escribir_en_pagina': {
         const texto = textoRequerido(args['texto'], 'texto', 2000);
-        output = await navegador.escribir(args['control'], texto);
+        const etiquetaRespaldo = typeof args['etiqueta'] === 'string' ? args['etiqueta'] : undefined;
+        output = await navegador.escribir(args['control'], texto, etiquetaRespaldo);
         break;
       }
       case 'desplazar_pagina': {

@@ -114,7 +114,7 @@ export const HERRAMIENTAS_LIVE = [
       {
         name: 'hacer_click',
         description:
-          'Hace clic en un control devuelto por inspeccionar_pagina. Para comprar, pagar, borrar, publicar, enviar o confirmar una accion sensible, primero hay que pedir confirmacion al usuario y luego enviar confirmado=true.',
+          'Hace clic en un control devuelto por inspeccionar_pagina. SIEMPRE mandar tambien "texto" con la etiqueta exacta que devolvio inspeccionar_pagina para ese control: si el identificador ya no coincide porque la pagina cambio, se busca ese texto y se hace clic igual en el mismo llamado, sin volver a preguntar ni re-inspeccionar. Para comprar, pagar, borrar, publicar, enviar o confirmar una accion sensible, primero hay que pedir confirmacion al usuario y luego enviar confirmado=true.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -122,18 +122,23 @@ export const HERRAMIENTAS_LIVE = [
               type: 'STRING',
               description: 'Identificador exacto del control, por ejemplo qh-3.',
             },
+            texto: {
+              type: 'STRING',
+              description:
+                'La etiqueta o texto de ese control tal como aparecio en inspeccionar_pagina. Obligatorio: es el respaldo que permite hacer clic aunque el identificador haya cambiado.',
+            },
             confirmado: {
               type: 'BOOLEAN',
               description: 'Verdadero solamente si el usuario confirmo expresamente la accion sensible.',
             },
           },
-          required: ['control'],
+          required: ['control', 'texto'],
         },
       },
       {
         name: 'escribir_en_pagina',
         description:
-          'Escribe texto en un campo devuelto por inspeccionar_pagina. Nunca se habilita para contrasenas, tarjetas, archivos ni otros campos protegidos.',
+          'Escribe texto en un campo devuelto por inspeccionar_pagina. SIEMPRE mandar tambien "etiqueta" con la etiqueta/placeholder exacto de ese campo segun inspeccionar_pagina: si el identificador ya no coincide porque la pagina cambio, se busca ese campo por su etiqueta y se escribe igual en el mismo llamado. Nunca se habilita para contrasenas, tarjetas, archivos ni otros campos protegidos.',
         parameters: {
           type: 'OBJECT',
           properties: {
@@ -141,12 +146,17 @@ export const HERRAMIENTAS_LIVE = [
               type: 'STRING',
               description: 'Identificador exacto del campo, por ejemplo qh-5.',
             },
+            etiqueta: {
+              type: 'STRING',
+              description:
+                'La etiqueta o placeholder de ese campo tal como aparecio en inspeccionar_pagina. Obligatorio: es el respaldo que permite escribir aunque el identificador haya cambiado.',
+            },
             texto: {
               type: 'STRING',
               description: 'Texto solicitado por el usuario.',
             },
           },
-          required: ['control', 'texto'],
+          required: ['control', 'etiqueta', 'texto'],
         },
       },
       {
