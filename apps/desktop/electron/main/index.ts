@@ -157,10 +157,12 @@ async function conectar(): Promise<void> {
   sesion = new SesionLive(configuracion());
 
   sesion.on('estado', (s) => {
+    process.stdout.write(`[voz:estado] ${s}\n`);
     if (s !== 'lista') controlInactividad.detener();
     publicar({ sesion: s });
   });
   sesion.on('lista', () => {
+    process.stdout.write('[voz:lista]\n');
     controlInactividad.iniciar();
     publicar({ sesion: 'lista', detalle: undefined });
   });
@@ -189,6 +191,7 @@ async function conectar(): Promise<void> {
     avisar(CANALES.interrumpido);
   });
   sesion.on('error', (detalle: string) => {
+    process.stdout.write(`[voz:error] ${detalle}\n`);
     publicar({ sesion: 'error', hablando: false, detalle });
     avisar(CANALES.error, detalle);
   });
@@ -293,6 +296,7 @@ function registrarIpc(): void {
   ipcMain.handle(CANALES.conectar, async () => {
     if (estado.frenado) soltarFreno();
     await conectar();
+    process.stdout.write(`[voz:conectar] lista=${sesion?.lista === true} estado=${sesion?.estado}\n`);
     if (sesion?.lista) sesion.enviarTexto(saludoVoz(vozElegida));
     return estado;
   });
@@ -309,8 +313,13 @@ function registrarIpc(): void {
   // El audio del micrófono llega crudo y seguido: `on` y no `handle`, porque
   // no hay nada que contestar y un round-trip por cada pedacito de voz sería
   // latencia regalada.
+  let avisoAudioSinSesion = 0;
   ipcMain.on(CANALES.audio, (_evento, pcm: ArrayBuffer) => {
     if (estado.frenado) return;
+    if (sesion?.lista !== true && Date.now() - avisoAudioSinSesion > 2000) {
+      avisoAudioSinSesion = Date.now();
+      process.stdout.write(`[voz:audio-descartado] sesion=${sesion === null ? 'null' : sesion.estado}\n`);
+    }
     sesion?.enviarAudio(Buffer.from(pcm));
   });
 
