@@ -47,6 +47,17 @@ corepack pnpm dist:win
 El archivo se crea en `apps/desktop/release/`. La edición pública requerirá el
 gateway y firma digital antes de publicarse en la landing.
 
+## Navegador Quantum
+
+Las búsquedas y direcciones solicitadas por voz se abren en una ventana web
+separada que Quantum puede inspeccionar, desplazar y operar. La sesión conserva
+cookies e inicios de sesión, pero el contenido remoto permanece sandboxeado,
+sin Node.js ni acceso al proceso principal.
+
+Quantum no interactúa con contraseñas, tarjetas ni archivos. Las descargas se
+bloquean y las acciones como comprar, pagar, borrar, publicar o enviar requieren
+confirmación explícita.
+
 ## Arquitectura
 
 Hoy, durante el desarrollo:

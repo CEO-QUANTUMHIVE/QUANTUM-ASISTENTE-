@@ -6,7 +6,7 @@
  */
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
-import { AUDIO, CANALES, type EstadoOrbe } from '../canales.js';
+import { AUDIO, CANALES, VOCES_DISPONIBLES, type EstadoOrbe, type VozDisponible } from '../canales.js';
 
 type Baja = () => void;
 
@@ -18,6 +18,7 @@ function escuchar<T>(canal: string, manejar: (carga: T) => void): Baja {
 
 const api = {
   audio: AUDIO,
+  voces: VOCES_DISPONIBLES,
 
   // --- sesión ------------------------------------------------------------
   conectar: (): Promise<EstadoOrbe> => ipcRenderer.invoke(CANALES.conectar),
@@ -30,10 +31,13 @@ const api = {
   enviarTexto: (texto: string): Promise<boolean> => ipcRenderer.invoke(CANALES.texto, texto),
 
   // --- ver ---------------------------------------------------------------
-  listarFuentes: (): Promise<Array<{ source_id: string; name: string; kind: string }>> =>
+  listarFuentes: (): Promise<Array<{ source_id: string; name: string; thumbnail_data_url?: string }>> =>
     ipcRenderer.invoke(CANALES.listarFuentes),
-  elegirFuente: (id: string): Promise<EstadoOrbe> => ipcRenderer.invoke(CANALES.elegirFuente, id),
+  elegirFuente: (id: string, nombre?: string): Promise<EstadoOrbe> =>
+    ipcRenderer.invoke(CANALES.elegirFuente, id, nombre),
   vision: (encendida: boolean): Promise<EstadoOrbe> => ipcRenderer.invoke(CANALES.vision, encendida),
+  elegirVoz: (voz: VozDisponible): Promise<EstadoOrbe> => ipcRenderer.invoke(CANALES.elegirVoz, voz),
+  probarVoz: (voz: VozDisponible): Promise<boolean> => ipcRenderer.invoke(CANALES.probarVoz, voz),
 
   // --- ventana -----------------------------------------------------------
   expandir: (expandido: boolean): Promise<boolean> => ipcRenderer.invoke(CANALES.expandir, expandido),

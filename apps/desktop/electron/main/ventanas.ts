@@ -15,7 +15,10 @@ import { join } from 'node:path';
 
 const PRECARGA = join(__dirname, '../preload/index.js');
 
-export const ORBE_COLAPSADO = { width: 132, height: 132 };
+// 108px de logo más lugar para el aura y las chispas de "mirando": si la
+// ventana mide justo lo del logo, el sistema operativo recorta esa capa en
+// un cuadrado apenas se pasa del borde.
+export const ORBE_COLAPSADO = { width: 180, height: 180 };
 export const ORBE_EXPANDIDO = { width: 384, height: 560 };
 const MARGEN = 24;
 
@@ -88,16 +91,17 @@ export function crearOrbe(): BrowserWindow {
  * y el chat aparece desde ahí. Si creciera hacia abajo se metería debajo de la
  * barra de tareas.
  */
-export function expandirOrbe(ventana: BrowserWindow, expandido: boolean): void {
-  if (ventana.isDestroyed()) return;
-
+function anclarTamano(ventana: BrowserWindow, tamano: { width: number; height: number }): void {
   const area = screen.getPrimaryDisplay().workArea;
-  const tamano = expandido ? ORBE_EXPANDIDO : ORBE_COLAPSADO;
-
   ventana.setBounds({
     width: tamano.width,
     height: tamano.height,
     x: area.x + area.width - tamano.width - MARGEN,
     y: area.y + area.height - tamano.height - MARGEN,
   });
+}
+
+export function expandirOrbe(ventana: BrowserWindow, expandido: boolean): void {
+  if (ventana.isDestroyed()) return;
+  anclarTamano(ventana, expandido ? ORBE_EXPANDIDO : ORBE_COLAPSADO);
 }
