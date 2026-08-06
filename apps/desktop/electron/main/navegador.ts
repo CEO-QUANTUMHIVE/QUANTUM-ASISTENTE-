@@ -38,6 +38,11 @@ import {
 
 const PARTICION = 'persist:quantum-navegador';
 const MAXIMO_CONTROLES = 80;
+/** Instagram y similares devuelven miles de nodos "interactivos"; sin este tope se recorren todos. */
+const MAXIMO_CANDIDATOS = 200;
+/** Cuántos nodos se resuelven en simultáneo — de a uno, una página pesada tarda minutos. */
+const LOTE_CONCURRENTE = 10;
+const CDP_TIMEOUT_MS = 4000;
 const MUNDO_AISLADO_NOMBRE = 'quantum-navegador-aislado';
 
 /** Roles de accesibilidad que cuentan como "se puede interactuar con esto". */
@@ -69,6 +74,11 @@ interface ControlPagina {
   placeholder: string;
   sensible: boolean;
   protegido: boolean;
+}
+
+/** Lo mismo que `ControlPagina`, más el nodo real — antes de que el modelo la vea nunca sale de acá. */
+interface ControlInterno extends Omit<ControlPagina, 'id'> {
+  backendNodeId: number;
 }
 
 export interface EstadoPagina {
@@ -217,12 +227,22 @@ export class NavegadorQuantum {
 
   // --- CDP -----------------------------------------------------------------
 
+  /**
+   * Con timeout siempre: una sola llamada de CDP que se cuelga (pasa, sobre
+   * todo en páginas pesadas tipo Instagram) no puede trabar toda una
+   * inspección — mejor perderse ese nodo puntual que no contestar nunca.
+   */
   private async cdp<T = unknown>(metodo: string, params: Record<string, unknown> = {}): Promise<T> {
     const ventana = this.ventana;
     if (ventana === null || ventana.isDestroyed()) throw new Error('el Navegador Quantum no esta abierto');
     const depurador = ventana.webContents.debugger;
     if (!depurador.isAttached()) depurador.attach('1.3');
-    return depurador.sendCommand(metodo, params) as Promise<T>;
+    return Promise.race([
+      depurador.sendCommand(metodo, params) as Promise<T>,
+      new Promise<T>((_r, rechazar) =>
+        setTimeout(() => rechazar(new Error(`CDP ${metodo} superó los ${CDP_TIMEOUT_MS}ms`)), CDP_TIMEOUT_MS),
+      ),
+    ]);
   }
 
   /**
@@ -268,17 +288,46 @@ export class NavegadorQuantum {
     }
   }
 
-  /** Todos los nodos de accesibilidad con rol interactivo, visibles u ocultos. */
+  /**
+   * Nodos de accesibilidad con rol interactivo, acotados a
+   * `MAXIMO_CANDIDATOS`. Sin este tope, una página tipo Instagram —miles de
+   * nodos "interactivos" en el feed— hace que la inspección tarde minutos o
+   * no vuelva nunca.
+   */
   private async candidatosAX(): Promise<NodoAX[]> {
     await this.cdp('DOM.enable');
     await this.cdp('Accessibility.enable');
     const { nodes } = await this.cdp<{ nodes: NodoAX[] }>('Accessibility.getFullAXTree', {});
-    return nodes.filter((nodo) => {
+    const candidatos = nodes.filter((nodo) => {
       if (nodo.ignored || nodo.backendDOMNodeId === undefined) return false;
       const rol = nodo.role?.value ?? '';
       if (ROLES_INTERACTIVOS.has(rol)) return true;
       return rol !== 'generic' && rol !== '' && esFocuseable(nodo);
     });
+    return candidatos.slice(0, MAXIMO_CANDIDATOS);
+  }
+
+  /** Arma un control a partir de un nodo AX, o `null` si no se puede tocar. */
+  private async armarControl(nodo: NodoAX, mundo: number): Promise<ControlInterno | null> {
+    const backendNodeId = nodo.backendDOMNodeId as number;
+    try {
+      // Sin caja de layout (display:none, etc.) no es algo que se pueda tocar.
+      await this.cdp('DOM.getBoxModel', { backendNodeId });
+    } catch {
+      return null;
+    }
+    const objeto = await this.resolverEnMundoAislado(backendNodeId, mundo);
+    if (objeto === null) return null;
+    const detalle = await this.detalleDe(objeto.objectId);
+    if (detalle === null) return null;
+    return {
+      tipo: detalle.tipo,
+      etiqueta: detalle.protegido ? '[campo protegido]' : detalle.etiqueta || nodo.name?.value || '',
+      placeholder: detalle.protegido ? '' : detalle.placeholder,
+      sensible: detalle.sensible,
+      protegido: detalle.protegido,
+      backendNodeId,
+    };
   }
 
   // --- acciones --------------------------------------------------------------
@@ -293,6 +342,7 @@ export class NavegadorQuantum {
   }
 
   async inspeccionar(): Promise<EstadoPagina> {
+    const empiezo = Date.now();
     this.obtenerVentana();
     const mundo = await this.mundoAislado();
 
@@ -309,36 +359,33 @@ export class NavegadorQuantum {
     );
 
     const candidatos = await this.candidatosAX();
-    this.controles = [];
-    const controles: ControlPagina[] = [];
+    const encontrados: ControlInterno[] = [];
 
-    for (const nodo of candidatos) {
-      if (controles.length >= MAXIMO_CONTROLES) break;
-      const backendNodeId = nodo.backendDOMNodeId as number;
-
-      // Sin caja de layout (display:none, etc.) no es algo que se pueda tocar.
-      try {
-        await this.cdp('DOM.getBoxModel', { backendNodeId });
-      } catch {
-        continue;
+    // De a lotes, no de a uno: con LOTE_CONCURRENTE=10 una página con 200
+    // candidatos tarda una fracción de lo que tardaba resolviéndolos en
+    // serie, y el tope de arriba (MAXIMO_CANDIDATOS) ya acota el total.
+    for (let inicio = 0; inicio < candidatos.length && encontrados.length < MAXIMO_CONTROLES; inicio += LOTE_CONCURRENTE) {
+      const lote = candidatos.slice(inicio, inicio + LOTE_CONCURRENTE);
+      const resueltos = await Promise.all(lote.map((nodo) => this.armarControl(nodo, mundo)));
+      for (const control of resueltos) {
+        if (control !== null) encontrados.push(control);
+        if (encontrados.length >= MAXIMO_CONTROLES) break;
       }
-
-      const objeto = await this.resolverEnMundoAislado(backendNodeId, mundo);
-      if (objeto === null) continue;
-      const detalle = await this.detalleDe(objeto.objectId);
-      if (detalle === null) continue;
-
-      this.controles.push(backendNodeId);
-      controles.push({
-        id: `qh-${this.controles.length}`,
-        tipo: detalle.tipo,
-        etiqueta: detalle.protegido ? '[campo protegido]' : detalle.etiqueta || nodo.name?.value || '',
-        placeholder: detalle.protegido ? '' : detalle.placeholder,
-        sensible: detalle.sensible,
-        protegido: detalle.protegido,
-      });
     }
 
+    this.controles = encontrados.map((c) => c.backendNodeId);
+    const controles: ControlPagina[] = encontrados.map((c, indice) => ({
+      id: `qh-${indice + 1}`,
+      tipo: c.tipo,
+      etiqueta: c.etiqueta,
+      placeholder: c.placeholder,
+      sensible: c.sensible,
+      protegido: c.protegido,
+    }));
+
+    process.stdout.write(
+      `[navegador:inspeccionar] ${Date.now() - empiezo}ms — ${candidatos.length} candidatos, ${controles.length} controles\n`,
+    );
     return { ...pagina.value, controles };
   }
 

@@ -102,27 +102,45 @@ export class SesionTexto extends EventEmitter {
       return;
     }
 
+    const cuerpo = JSON.stringify({
+      contents: this.historial,
+      systemInstruction: { parts: [{ text: armarInstruccion(this.contexto) }] },
+      tools: HERRAMIENTAS_LIVE,
+    });
+
     let respuesta: Response;
-    try {
-      respuesta = await fetch(this.url, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: this.historial,
-          systemInstruction: { parts: [{ text: armarInstruccion(this.contexto) }] },
-          tools: HERRAMIENTAS_LIVE,
-        }),
-      });
-    } catch (error) {
-      this.emit('error', error instanceof Error ? error.message : String(error));
-      this.historial.pop();
-      return;
+    let intento = 0;
+    for (;;) {
+      try {
+        respuesta = await fetch(this.url, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: cuerpo,
+        });
+      } catch (error) {
+        this.emit('error', error instanceof Error ? error.message : String(error));
+        this.historial.pop();
+        return;
+      }
+
+      // 429 en Vertex suele ser cupo por minuto: casi siempre se soluciona
+      // solo esperando un toque. Un reintento silencioso, no molestar con
+      // esto salvo que persista.
+      if (respuesta.status === 429 && intento < 1) {
+        intento += 1;
+        await new Promise((r) => setTimeout(r, 3000));
+        continue;
+      }
+      break;
     }
 
     if (!respuesta.ok) {
-      const detalle = await respuesta.text().catch(() => '');
       if (respuesta.status === 401) olvidarToken();
-      this.emit('error', `El modelo de texto contestó ${respuesta.status}: ${detalle.slice(0, 300)}`);
+      const mensaje =
+        respuesta.status === 429
+          ? 'Estoy con muchos pedidos ahora mismo, dame un segundo y probá de nuevo.'
+          : `El modelo de texto contestó ${respuesta.status}: ${(await respuesta.text().catch(() => '')).slice(0, 300)}`;
+      this.emit('error', mensaje);
       this.historial.pop();
       return;
     }
@@ -148,6 +166,11 @@ export class SesionTexto extends EventEmitter {
       this.emit('turno-fin');
       return;
     }
+
+    // Si dijo algo Y además llamó una herramienta, ese texto es un mensaje
+    // aparte ("Entendido, abro Instagram") — sin este cierre, el chat lo pega
+    // sin espacio con lo que conteste después del resultado de la herramienta.
+    if (texto) this.emit('turno-fin');
 
     if (vuelta >= MAX_VUELTAS_HERRAMIENTAS) {
       this.emit('error', 'Se cortó una cadena de herramientas demasiado larga.');
